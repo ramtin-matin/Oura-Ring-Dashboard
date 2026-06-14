@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: oura-postgres
+    environment:
+      POSTGRES_USER: oura_user
+      POSTGRES_PASSWORD: oura_password
+      POSTGRES_DB: oura_dashboard
+    ports:
+      - "5432:5432"
+    volumes:
+      - oura_pg_data:/var/lib/postgresql/data
+
+volumes:
+  oura_pg_data:
