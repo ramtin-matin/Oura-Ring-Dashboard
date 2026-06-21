@@ -1,6 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
+
+class OuraCodeUpsert(BaseModel):
+  access_token: str
+  refresh_token: str
 
 class DailyMetricCreate(BaseModel):
   metric_date: date
