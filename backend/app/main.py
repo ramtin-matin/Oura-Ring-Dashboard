@@ -63,6 +63,29 @@ def call_api(endpoint, db, params):
     except Exception as e:
          raise Exception("API call failed: ", e)
     
+# pagination handler for endpoints
+def fetch_all_pages(endpoint, db, params):
+    return_list = []
+
+    response = call_api(endpoint, db, params)
+    data = response.json()
+
+    return_list.extend(data["data"])
+
+    # handle next_tokens
+    while True:
+        # get token for pagination
+        next_token = data["next_token"]
+        if next_token is None:
+            break
+        params["next_token"] = next_token
+
+        new_response = call_api(endpoint, db, params)
+        data = new_response.json()
+        return_list.extend(data["data"])
+    
+    return return_list
+    
 # refresh oauth tokens
 def refresh_access_token(refresh_token):
     try:
@@ -154,13 +177,35 @@ def oura_callback(code: str, db: Session = Depends(get_db)):
 
 # End of OAuth 2 section
 
-@app.get("/sleep")
+@app.get("/daily_sleep")
 def get_sleep_scores(db: Session = Depends(get_db)):
     params={ 
-        'start_date': '2026-06-12', 
+        'start_date': '2025-01-15', 
         'end_date': '2026-06-15',
+        'fields': 'day,score',
     }
 
-    response = call_api("usercollection/sleep", db, params)
-    print(response.request.url)
-    return response.json()
+    return_list = fetch_all_pages("usercollection/daily_sleep", db, params)    
+    return return_list
+
+@app.get("/daily_readiness")
+def get_readiness_scores(db: Session = Depends(get_db)):
+    params={ 
+        'start_date': '2025-01-15', 
+        'end_date': '2026-06-15',
+        'fields': 'day,score',
+    }
+
+    return_list = fetch_all_pages("usercollection/daily_readiness", db, params)    
+    return return_list
+
+@app.get("/daily_activity")
+def get_activity_scores(db: Session = Depends(get_db)):
+    params={ 
+        'start_date': '2025-01-15', 
+        'end_date': '2026-06-15',
+        'fields': 'day,score',
+    }
+
+    return_list = fetch_all_pages("usercollection/daily_activity", db, params)    
+    return return_list
