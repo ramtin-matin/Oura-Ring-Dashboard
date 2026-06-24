@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Date, Integer, DateTime
+from sqlalchemy import Date, Integer, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -18,5 +18,5 @@ class OuraCodes(Base):
   __tablename__ = "oura_codes"
 
   id: Mapped[int] = mapped_column(primary_key=True)
-  access_token: Mapped[str] = mapped_column(unique=True)
-  refresh_token: Mapped[str] = mapped_column(unique=True)
+  access_token: Mapped[str] = mapped_column(String, unique=True)
+  refresh_token: Mapped[str] = mapped_column(String, unique=True)

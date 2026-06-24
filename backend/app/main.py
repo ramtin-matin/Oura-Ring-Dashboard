@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.models import DailyMetric, OuraCodes
-from app.schemas import DailyMetricCreate, DailyMetricResponse, OuraCodeUpsert
 from fastapi.responses import RedirectResponse
 
+from sqlalchemy.dialects.postgresql import insert
+
 from urllib.parse import urlencode
-from datetime import datetime, timezone
 import requests
 
 import os
@@ -105,6 +105,74 @@ def refresh_access_token(refresh_token):
     except Exception as e:
         raise Exception("Refresh failed: ", e)
 
+# normalize raw daily_score payload (sleep, readiness, activity) from oura
+def normalize_daily_score_data(payload, metric_type):
+    # payload is a list of dicts [{}, {}, ...]
+    if payload is None:
+        return []
+
+    allowed = {"sleep_score", "activity_score", "readiness_score"}
+
+    if metric_type not in allowed:
+        raise Exception("Wrong metric type")
+
+    normalized_data = []
+
+    skipped = 0
+
+    for obj in payload:
+        if obj.get("day") is None or obj.get("score") is None:
+            skipped += 1
+            continue
+
+        new_obj = {
+            "metric_date": obj.get("day"),
+            metric_type: obj.get("score"),
+        }
+
+        normalized_data.append(new_obj)
+
+    return {
+    "records": normalized_data,
+    "skipped": skipped
+    }
+
+# ingest normalized data into db
+def ingest_data(data, metric_type, db):
+    # data is a list of dicts [{}, {}, ...]
+    if data is None:
+        raise Exception("Payload is empty")
+    
+    allowed = {"sleep_score", "activity_score", "readiness_score"}
+
+    if metric_type not in allowed:
+        raise Exception("Wrong metric type")
+    
+    processed = 0
+
+    # 1. Build the base insert
+    for obj in data:
+        statement = insert(DailyMetric).values(metric_date=obj.get("metric_date"), sleep_score=obj.get("sleep_score"), readiness_score=obj.get("readiness_score"), activity_score=obj.get("activity_score"))
+        
+        mapping = {
+            "sleep_score": statement.excluded.sleep_score,
+            "readiness_score": statement.excluded.readiness_score,
+            "activity_score": statement.excluded.activity_score,
+        }
+
+        # define the conflict resolution
+        upsert_stmt = statement.on_conflict_do_update(
+            index_elements=['metric_date'],  # unique key column
+            set_={
+                metric_type: mapping.get(metric_type),
+            }
+        )
+
+        db.execute(upsert_stmt)
+        processed += 1
+    db.commit()
+
+    return processed
 
 # Start of OAuth 2 section
 # get variables from ENV
@@ -177,10 +245,11 @@ def oura_callback(code: str, db: Session = Depends(get_db)):
 
 # End of OAuth 2 section
 
+
 @app.get("/daily_sleep")
 def get_sleep_scores(db: Session = Depends(get_db)):
     params={ 
-        'start_date': '2025-01-15', 
+        'start_date': '2026-05-15', 
         'end_date': '2026-06-15',
         'fields': 'day,score',
     }
@@ -209,3 +278,42 @@ def get_activity_scores(db: Session = Depends(get_db)):
 
     return_list = fetch_all_pages("usercollection/daily_activity", db, params)    
     return return_list
+
+@app.post("/ingest/daily_sleep")
+def ingest_daily_sleep_into_db(db: Session = Depends(get_db)):
+    params={ 
+        'start_date': '2025-01-15', 
+        'end_date': '2026-06-15',
+        'fields': 'day,score',
+    }
+
+    return_list = fetch_all_pages("usercollection/daily_sleep", db, params)
+    normalized = normalize_daily_score_data(return_list, "sleep_score")
+    processed_count = ingest_data(normalized["records"], "sleep_score", db)
+    return {"processed_count" : processed_count, "skipped" : normalized["skipped"]}
+
+@app.post("/ingest/daily_readiness")
+def ingest_daily_readiness_into_db(db: Session = Depends(get_db)):
+    params={ 
+        'start_date': '2025-01-15', 
+        'end_date': '2026-06-15',
+        'fields': 'day,score',
+    }
+
+    return_list = fetch_all_pages("usercollection/daily_readiness", db, params)
+    normalized = normalize_daily_score_data(return_list, "readiness_score")
+    processed_count = ingest_data(normalized["records"], "readiness_score", db)
+    return {"processed_count" : processed_count, "skipped" : normalized["skipped"]}
+
+@app.post("/ingest/daily_activity")
+def ingest_daily_activity_into_db(db: Session = Depends(get_db)):
+    params={ 
+        'start_date': '2025-01-15', 
+        'end_date': '2026-06-15',
+        'fields': 'day,score',
+    }
+
+    return_list = fetch_all_pages("usercollection/daily_activity", db, params)
+    normalized = normalize_daily_score_data(return_list, "activity_score")
+    processed_count = ingest_data(normalized["records"], "activity_score", db)
+    return {"processed_count" : processed_count, "skipped" : normalized["skipped"]}
