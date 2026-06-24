@@ -4,7 +4,7 @@ from app.database import Base, engine, get_db
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
 from app.models import DailyMetric, OuraCodes
 from fastapi.responses import RedirectResponse
@@ -291,6 +291,8 @@ def get_all_rows_from_db(start_date: date | None = None, end_date: date | None =
     
     if end_date is not None:
         statement = statement.where(DailyMetric.metric_date <= end_date)
+    
+    statement = statement.order_by(DailyMetric.metric_date.desc())
     
     rows = db.scalars(statement).all()
     return rows
