@@ -16,6 +16,8 @@ import requests
 
 import os
 
+from datetime import date
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -246,7 +248,7 @@ def oura_callback(code: str, db: Session = Depends(get_db)):
 # End of OAuth 2 section
 
 
-@app.get("/daily_sleep")
+@app.get("/oura/daily_sleep")
 def get_sleep_scores(db: Session = Depends(get_db)):
     params={ 
         'start_date': '2026-05-15', 
@@ -257,7 +259,7 @@ def get_sleep_scores(db: Session = Depends(get_db)):
     return_list = fetch_all_pages("usercollection/daily_sleep", db, params)    
     return return_list
 
-@app.get("/daily_readiness")
+@app.get("/oura/daily_readiness")
 def get_readiness_scores(db: Session = Depends(get_db)):
     params={ 
         'start_date': '2025-01-15', 
@@ -268,7 +270,7 @@ def get_readiness_scores(db: Session = Depends(get_db)):
     return_list = fetch_all_pages("usercollection/daily_readiness", db, params)    
     return return_list
 
-@app.get("/daily_activity")
+@app.get("/oura/daily_activity")
 def get_activity_scores(db: Session = Depends(get_db)):
     params={ 
         'start_date': '2025-01-15', 
@@ -278,6 +280,20 @@ def get_activity_scores(db: Session = Depends(get_db)):
 
     return_list = fetch_all_pages("usercollection/daily_activity", db, params)    
     return return_list
+
+# get daily_metrics from db
+@app.get("/db/metrics")
+def get_all_rows_from_db(start_date: date | None = None, end_date: date | None = None, db: Session = Depends(get_db)):
+    statement = select(DailyMetric)
+
+    if start_date is not None:
+        statement = statement.where(DailyMetric.metric_date >= start_date)
+    
+    if end_date is not None:
+        statement = statement.where(DailyMetric.metric_date <= end_date)
+    
+    rows = db.scalars(statement).all()
+    return rows
 
 @app.post("/ingest/daily_sleep")
 def ingest_daily_sleep_into_db(db: Session = Depends(get_db)):
@@ -292,6 +308,7 @@ def ingest_daily_sleep_into_db(db: Session = Depends(get_db)):
     processed_count = ingest_data(normalized["records"], "sleep_score", db)
     return {"processed_count" : processed_count, "skipped" : normalized["skipped"]}
 
+
 @app.post("/ingest/daily_readiness")
 def ingest_daily_readiness_into_db(db: Session = Depends(get_db)):
     params={ 
@@ -304,6 +321,7 @@ def ingest_daily_readiness_into_db(db: Session = Depends(get_db)):
     normalized = normalize_daily_score_data(return_list, "readiness_score")
     processed_count = ingest_data(normalized["records"], "readiness_score", db)
     return {"processed_count" : processed_count, "skipped" : normalized["skipped"]}
+
 
 @app.post("/ingest/daily_activity")
 def ingest_daily_activity_into_db(db: Session = Depends(get_db)):
