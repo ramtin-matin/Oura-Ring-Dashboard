@@ -1,9 +1,9 @@
 from datetime import date
 
-from sqlalchemy import Date, Integer, DateTime, String
+from sqlalchemy import Date, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from routers.database import Base
 
 class DailyMetric(Base):
   __tablename__ = "daily_metrics"
